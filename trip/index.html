@@ -1,0 +1,201 @@
+<!doctype html>
+<!--
+  A day trip, shared from ActiveMind. Published from web/share in the
+  ActiveMind repo to the public chuybites/activemind-share repo, served
+  by GitHub Pages at https://chuybites.github.io/activemind-share/trip/?id=…
+
+  It asks Supabase for one trip by its link id (get_shared_trip, which
+  returns that trip while the link is live and nothing else) with the
+  publishable key, which is public by design. Everything from the trip is
+  written with textContent, never as HTML, and only http(s) links are
+  followed, because the trip is whatever the sharer's phone sent.
+  The map is Leaflet over OpenStreetMap tiles, credited as they ask.
+  Colours are the app's tokens (app/tokens.ts): paper, ink, Move coral.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://cdnjs.cloudflare.com; img-src data: https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://cdnjs.cloudflare.com; connect-src https://idjbuusxzifyleikvlpq.supabase.co; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>A day out · ActiveMind</title>
+<meta name="description" content="A day trip, shared from ActiveMind.">
+<meta property="og:title" content="A day out, shared from ActiveMind">
+<meta property="og:description" content="The stops, the times and the map. Open it to see the day.">
+<meta name="theme-color" content="#AC5731">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --paper: #F7F5F0; --ink: #1a1a1a; --soft: #5f5d59; --muted: #5e5950;
+    --card: #FFFFFF; --well: #F2EFE8; --line: #EAE5DB;
+    --move: #F07A45; --move-band: #AC5731; --move-text: #AC5731;
+    --on: #FFFFFF; --on-soft: rgba(255,255,255,0.86);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0E1424; --ink: #FFFFFF; --soft: rgba(255,255,255,0.6); --muted: rgba(255,255,255,0.56);
+      --card: rgba(255,255,255,0.06); --well: rgba(255,255,255,0.08); --line: rgba(255,255,255,0.08);
+      --move-text: #F07A45;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    padding: 16px 16px calc(40px + env(safe-area-inset-bottom));
+    max-width: 640px; margin: 0 auto;
+  }
+  .band { background: var(--move-band); color: var(--on); border-radius: 26px; padding: 20px; }
+  .kicker { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--on-soft); }
+  .head { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .glyph { width: 48px; height: 48px; flex: none; border-radius: 14px; background: rgba(255,255,255,0.18); display: grid; place-items: center; font-size: 24px; }
+  h1 { font-size: 24px; line-height: 1.2; font-weight: 800; letter-spacing: -0.4px; }
+  .sub { font-weight: 600; color: var(--on-soft); margin-top: 10px; }
+  #map { height: 220px; border-radius: 20px; margin-top: 12px; overflow: hidden; background: var(--well); }
+  .open { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; padding: 14px; border-radius: 14px;
+    background: var(--move-band); color: var(--on); font-weight: 800; text-decoration: none; }
+  .hint { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; }
+  h2 { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; color: var(--muted); margin: 24px 4px 10px; }
+  .stop { background: var(--card); border: 0.5px solid var(--line); border-radius: 20px; padding: 16px; margin-bottom: 10px; }
+  .time { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; color: var(--move-text); text-transform: uppercase; }
+  .name { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 17px; font-weight: 800; }
+  .desc { font-size: 13px; color: var(--soft); margin-top: 4px; }
+  .addr { font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 4px; }
+  .acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .acts a { font-size: 13px; font-weight: 700; color: var(--ink); background: var(--well); padding: 8px 12px; border-radius: 999px; text-decoration: none; }
+  .ended { text-align: center; padding: 48px 20px; background: var(--well); border-radius: 20px; margin-top: 24px; }
+  .ended .big { font-size: 32px; }
+  .ended h1 { font-size: 20px; margin-top: 8px; }
+  .ended p { color: var(--soft); margin-top: 6px; }
+  footer { text-align: center; font-size: 13px; color: var(--muted); margin-top: 28px; }
+  footer a { color: var(--muted); }
+  .pin { width: 26px; height: 26px; border-radius: 50%; background: var(--move-band); color: #fff; border: 2px solid #fff;
+    display: grid; place-items: center; font: 800 12px -apple-system, system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  .skeleton { height: 170px; border-radius: 26px; background: var(--well); }
+</style>
+</head>
+<body>
+<main id="app"><div class="skeleton" aria-label="Loading"></div></main>
+<footer>
+  Made with ActiveMind · move · think · thrive<br>
+  <a href="https://chuybites.github.io/activemind-privacy/">Privacy</a>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  var SUPABASE = "https://idjbuusxzifyleikvlpq.supabase.co";
+  var KEY = "sb_publishable_nVIwYRmyPRuM-0CQ_PRvKw_kiZzC0om";
+  var app = document.getElementById("app");
+  var id = new URLSearchParams(location.search).get("id") || "";
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = String(text);
+    return n;
+  }
+  function str(v, max) { return typeof v === "string" ? v.slice(0, max || 400) : ""; }
+  function num(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+  function safeUrl(u) { try { var x = new URL(u); return x.protocol === "https:" || x.protocol === "http:" ? x.href : null; } catch (e) { return null; } }
+
+  function ended(title, body) {
+    app.textContent = "";
+    var box = el("div", "ended");
+    box.appendChild(el("div", "big", "🔗"));
+    box.appendChild(el("h1", null, title));
+    box.appendChild(el("p", null, body));
+    app.appendChild(box);
+  }
+
+  if (!/^[A-Za-z0-9_-]{12}$/.test(id)) { ended("This link isn't complete", "Ask whoever sent it to send it again."); return; }
+
+  fetch(SUPABASE + "/rest/v1/rpc/get_shared_trip", {
+    method: "POST",
+    headers: { "apikey": KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ share_id: id })
+  }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (rows) {
+      var row = Array.isArray(rows) ? rows[0] : null;
+      if (!row || !row.trip || !Array.isArray(row.trip.stops)) {
+        ended("This link has ended", "Links last 30 days, and whoever shared it can stop it sooner. Ask them to send it again.");
+        return;
+      }
+      draw(row);
+    })
+    .catch(function () { ended("Couldn't load this day", "Check your connection and try again."); });
+
+  function draw(row) {
+    var trip = row.trip;
+    var title = str(row.title, 120) || str(trip.title, 120) || "A day out";
+    document.title = title + " · ActiveMind";
+    app.textContent = "";
+
+    var who = str(row.sharer_name, 40);
+    var band = el("section", "band");
+    band.appendChild(el("div", "kicker", (who ? (str(row.sharer_avatar, 16) + " " + who).trim() : "Someone") + " shared a day out"));
+    var head = el("div", "head");
+    head.appendChild(el("div", "glyph", str(row.emoji, 16) || "🗺️"));
+    head.appendChild(el("h1", null, title));
+    band.appendChild(head);
+    if (str(trip.sub)) band.appendChild(el("div", "sub", str(trip.sub)));
+    var meta = [str(trip.window, 60), str(trip.bestFor, 60)].filter(Boolean).join("  ·  ");
+    if (meta) band.appendChild(el("div", "sub", meta));
+    app.appendChild(band);
+
+    var stops = trip.stops.filter(function (s) { return s && typeof s.name === "string"; }).slice(0, 20);
+    var placed = stops.map(function (s, i) { return { s: s, i: i, lat: num(s.lat), lng: num(s.lng) }; })
+      .filter(function (p) { return p.lat != null && p.lng != null && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180; });
+
+    if (placed.length && window.L) {
+      var mapEl = el("div"); mapEl.id = "map"; app.appendChild(mapEl);
+      var map = L.map(mapEl, { zoomControl: false, attributionControl: true, scrollWheelZoom: false });
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19, attribution: "© OpenStreetMap contributors"
+      }).addTo(map);
+      var pts = placed.map(function (p) { return [p.lat, p.lng]; });
+      if (pts.length > 1) L.polyline(pts, { color: "#AC5731", weight: 3, opacity: 0.8, dashArray: "6 6" }).addTo(map);
+      placed.forEach(function (p) {
+        L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="pin">' + (p.i + 1) + "</div>", iconSize: [26, 26], iconAnchor: [13, 13] }), title: str(p.s.name, 80) }).addTo(map);
+      });
+      if (pts.length === 1) map.setView(pts[0], 14); else map.fitBounds(pts, { padding: [28, 28] });
+    }
+
+    var open = el("a", "open", "Open in ActiveMind");
+    open.href = "activemind://open/screen/shared-trip?id=" + id;
+    app.appendChild(open);
+    app.appendChild(el("div", "hint", "Have ActiveMind on your iPhone? Open it there to save the day."));
+
+    app.appendChild(el("h2", null, stops.length + (stops.length === 1 ? " STOP" : " STOPS")));
+    stops.forEach(function (s) {
+      var card = el("article", "stop");
+      if (str(s.time, 20)) card.appendChild(el("div", "time", str(s.time, 20)));
+      var name = el("div", "name");
+      name.appendChild(el("span", null, str(s.emoji, 16)));
+      name.appendChild(el("span", null, str(s.name, 120)));
+      card.appendChild(name);
+      if (str(s.miniDesc)) card.appendChild(el("div", "desc", str(s.miniDesc)));
+      if (str(s.address)) card.appendChild(el("div", "addr", str(s.address, 200)));
+      var acts = el("div", "acts");
+      var lat = num(s.lat), lng = num(s.lng);
+      var dir = el("a", null, "Directions");
+      dir.href = lat != null && lng != null
+        ? "https://maps.apple.com/?daddr=" + lat + "," + lng + "&q=" + encodeURIComponent(str(s.name, 120))
+        : "https://maps.apple.com/?q=" + encodeURIComponent(str(s.address, 200) || str(s.name, 120));
+      dir.rel = "noopener"; dir.target = "_blank";
+      acts.appendChild(dir);
+      var site = safeUrl(s.url);
+      if (site) { var w = el("a", null, "Website"); w.href = site; w.rel = "noopener nofollow"; w.target = "_blank"; acts.appendChild(w); }
+      var phone = str(s.phone, 40).replace(/[^\d+]/g, "");
+      if (phone.length >= 7) { var c = el("a", null, "Call"); c.href = "tel:" + phone; acts.appendChild(c); }
+      card.appendChild(acts);
+      app.appendChild(card);
+    });
+
+    var ends = new Date(row.expires_at);
+    if (!isNaN(ends)) app.appendChild(el("div", "hint", "This link ends on " + ends.toLocaleDateString(undefined, { month: "long", day: "numeric" }) + "."));
+  }
+})();
+</script>
+</body>
+</html>
