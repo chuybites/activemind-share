@@ -6,7 +6,7 @@
   Asks Supabase who sent the invite (get_buddy_invite: the inviter's
   chosen name and emoji, while the invite is live, nothing else) and hands
   the code to the app, where saying yes happens. Written with textContent.
-  Colours: the app's Thrive teal (app/tokens.ts), since a buddy lives on You.
+  Colours: the app's Thrive teal (app/tokens.ts), since your circle lives on You.
 -->
 <html lang="en">
 <head>
@@ -14,10 +14,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://idjbuusxzifyleikvlpq.supabase.co; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Be buddies · ActiveMind</title>
-<meta name="description" content="An invite to be buddies on ActiveMind.">
-<meta property="og:title" content="Be my ActiveMind buddy?">
-<meta property="og:description" content="We'd each see the other's streak and whether we moved today. Nothing else.">
+<title>Join my circle · ActiveMind</title>
+<meta name="description" content="An invite to join a circle of friends on ActiveMind.">
+<meta property="og:title" content="Join my circle on ActiveMind?">
+<meta property="og:description" content="Cheers, plans, a question a week and challenges together. Never moods, journal, places or Health.">
 <meta name="theme-color" content="#188178">
 <style>
   :root {
@@ -81,17 +81,17 @@
       var band = el("section", "band");
       band.appendChild(el("div", "face", str(row.inviter_avatar, 16) || "🌿"));
       band.appendChild(el("div", "kicker", name + " invited you"));
-      band.appendChild(el("h1", null, "Be buddies on ActiveMind"));
+      band.appendChild(el("h1", null, "Join " + name + "'s circle"));
       app.appendChild(band);
       app.appendChild(el("h2", null, "WHAT YOU EACH SEE"));
       var list = el("div", "list");
-      [["🔥", "Each other's streak"], ["✅", "Whether you moved today"], ["👋", "One nudge a day, each"], ["🔒", "Never your moods, journal, places or Health"]]
+      [["🪪", "Each other's profile card"], ["🔥", "Your streaks, and whether you moved today"], ["👋", "Cheers, notes, plans and postcards you send"], ["🔒", "Never your moods, journal, places or Health"]]
         .forEach(function (x) { var r = el("div", "row"); r.appendChild(el("span", null, x[0])); r.appendChild(el("span", null, x[1])); list.appendChild(r); });
       app.appendChild(list);
       var open = el("a", "open", "Open in ActiveMind to say yes");
       open.href = "activemind://open/screen/buddy-invite?code=" + code;
       app.appendChild(open);
-      app.appendChild(el("div", "hint", "You'll need ActiveMind on your iPhone. Either of you can unpair any time."));
+      app.appendChild(el("div", "hint", "You'll need ActiveMind on your iPhone. Either of you can leave any time."));
     })
     .catch(function () { ended("Couldn't load this invite", "Check your connection and try again."); });
 })();
